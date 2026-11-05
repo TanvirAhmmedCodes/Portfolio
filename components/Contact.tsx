@@ -25,6 +25,8 @@ export default function Contact() {
   const [formData, setFormData] = useState({ name: "", email: "", subject: "", message: "" });
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [lastSubmitted, setLastSubmitted] = useState<{ subject: string; message: string; email: string } | null>(null);
 
   const copyEmail = () => {
     sound.playClick();
@@ -33,16 +35,33 @@ export default function Contact() {
     setTimeout(() => setCopied(false), 2500);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     sound.playClick();
     setSubmitting(true);
-    setTimeout(() => {
-      setSubmitting(false);
+    setErrorMessage("");
+
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to dispatch message");
+      }
+
+      setLastSubmitted({ subject: formData.subject, message: formData.message, email: formData.email });
       setSubmitted(true);
       setFormData({ name: "", email: "", subject: "", message: "" });
-      setTimeout(() => setSubmitted(false), 5000);
-    }, 1200);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Error sending message. Please try again or use direct email.";
+      setErrorMessage(msg);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const socials = [
@@ -196,7 +215,7 @@ export default function Contact() {
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="py-16 text-center space-y-4"
+                  className="py-12 text-center space-y-4"
                 >
                   <div className="w-14 h-14 rounded-full bg-[#00D9FF]/20 border border-[#00D9FF] mx-auto flex items-center justify-center text-[#00D9FF]">
                     <Check className="w-7 h-7" />
@@ -204,12 +223,36 @@ export default function Contact() {
                   <h4 className="font-display font-black text-2xl text-white">
                     Message Dispatched Successfully!
                   </h4>
-                  <p className="text-xs font-mono text-white/60 max-w-sm mx-auto">
-                    Thank you for reaching out. Tanvir will review your message and respond shortly.
+                  <p className="text-xs font-mono text-white/70 max-w-sm mx-auto leading-relaxed">
+                    Your message has been securely recorded and dispatched to Tanvir&apos;s personal inbox. Tanvir will respond shortly.
                   </p>
+
+                  <div className="pt-4 flex flex-wrap items-center justify-center gap-3">
+                    <button
+                      onClick={() => setSubmitted(false)}
+                      className="px-5 py-2.5 rounded-xl bg-white/[0.05] border border-white/10 hover:border-white/30 text-xs font-mono text-white transition-all"
+                    >
+                      Send Another Message
+                    </button>
+                    {lastSubmitted && (
+                      <a
+                        href={`mailto:${personal.email}?subject=${encodeURIComponent(lastSubmitted.subject)}&body=${encodeURIComponent(lastSubmitted.message)}`}
+                        onClick={() => sound.playClick()}
+                        className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-[#00D9FF] text-[#08090B] text-xs font-mono font-bold hover:bg-[#38e1ff] transition-all"
+                      >
+                        <span>Open in Mail Client</span>
+                        <ArrowUpRight className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+                  </div>
                 </motion.div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-6">
+                  {errorMessage && (
+                    <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-mono">
+                      {errorMessage}
+                    </div>
+                  )}
                   <div className="grid md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <label className="block font-mono text-[11px] text-white/60 uppercase tracking-wider">

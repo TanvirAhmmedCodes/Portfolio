@@ -18,6 +18,7 @@ import {
   Save,
   User,
   RefreshCw,
+  Mail,
 } from "lucide-react";
 
 interface AchievementItem {
@@ -46,12 +47,23 @@ interface ProjectItem {
   tags: string[];
 }
 
+interface MessageItem {
+  id: string;
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+  date: string;
+  read?: boolean;
+}
+
 export default function OwnerAccess() {
   const [password, setPassword] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<"achievements" | "projects" | "personal">("achievements");
+  const [activeTab, setActiveTab] = useState<"achievements" | "projects" | "personal" | "messages">("achievements");
+  const [messages, setMessages] = useState<MessageItem[]>([]);
 
   // Dynamic state
   const [achievements, setAchievements] = useState<AchievementItem[]>([]);
@@ -106,6 +118,7 @@ export default function OwnerAccess() {
       const data = await res.json();
       if (data.achievements) setAchievements(data.achievements);
       if (data.projects) setProjects(data.projects);
+      if (data.messages) setMessages(data.messages);
       if (data.personal) {
         setPersonalData({
           name: data.personal.name || personal.name,
@@ -125,6 +138,27 @@ export default function OwnerAccess() {
       }
     } catch (err) {
       console.error("Failed to load CMS data:", err);
+    }
+  };
+
+  const handleDeleteMessage = async (id: string) => {
+    try {
+      const res = await fetch("/api/owner-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "delete_message",
+          id,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.messages) {
+        setMessages(data.messages);
+        setNotification("Message deleted from inbox.");
+        setTimeout(() => setNotification(""), 3000);
+      }
+    } catch {
+      setError("Failed to delete message.");
     }
   };
 
@@ -421,6 +455,31 @@ export default function OwnerAccess() {
           >
             <ShieldCheck className="w-4 h-4" />
             <span>Identity &amp; Bio View</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("messages")}
+            className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl text-xs font-mono uppercase tracking-wider transition-all text-left ${
+              activeTab === "messages"
+                ? "bg-[#00D9FF] text-[#08090B] font-bold shadow-lg"
+                : "bg-[#111418] text-white/70 hover:text-white border border-white/5"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <Mail className="w-4 h-4" />
+              <span>Inbox &amp; Messages</span>
+            </div>
+            {messages.length > 0 && (
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono ${
+                  activeTab === "messages"
+                    ? "bg-[#08090B] text-[#00D9FF]"
+                    : "bg-[#00D9FF]/20 text-[#00D9FF]"
+                }`}
+              >
+                {messages.length}
+              </span>
+            )}
           </button>
         </aside>
 
@@ -1017,6 +1076,95 @@ export default function OwnerAccess() {
                   </button>
                 </div>
               </form>
+            </div>
+          )}
+
+          {/* TAB 4: INBOX & DIRECT INQUIRIES */}
+          {activeTab === "messages" && (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-white/10 gap-4">
+                <div>
+                  <h3 className="font-display font-black text-2xl text-white">
+                    Inbox &amp; Direct Dispatches
+                  </h3>
+                  <p className="font-mono text-xs text-white/50 mt-1">
+                    Every message submitted through your portfolio contact form is recorded here.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#00D9FF]/10 border border-[#00D9FF]/30 text-xs font-mono text-[#00D9FF] self-start sm:self-auto">
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>{messages.length} Recorded Message{messages.length === 1 ? "" : "s"}</span>
+                </div>
+              </div>
+
+              {messages.length === 0 ? (
+                <div className="py-20 text-center rounded-2xl bg-[#111418] border border-white/5 space-y-3">
+                  <div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 mx-auto flex items-center justify-center text-white/40">
+                    <Mail className="w-6 h-6" />
+                  </div>
+                  <h4 className="font-display font-bold text-lg text-white">Inbox is Clear</h4>
+                  <p className="text-xs font-mono text-white/40 max-w-sm mx-auto">
+                    When visitors submit an inquiry through your portfolio, it will be stored and listed here immediately.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {messages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className="p-6 rounded-2xl bg-[#111418] border border-white/10 hover:border-[#00D9FF]/30 transition-all space-y-4"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-[#00D9FF]/10 border border-[#00D9FF]/30 flex items-center justify-center text-[#00D9FF] font-bold text-xs uppercase shrink-0">
+                            {msg.name ? msg.name.slice(0, 2) : "TX"}
+                          </div>
+                          <div>
+                            <div className="font-display font-bold text-sm text-white">{msg.name}</div>
+                            <a
+                              href={`mailto:${msg.email}`}
+                              className="font-mono text-xs text-[#00D9FF] hover:underline"
+                            >
+                              {msg.email}
+                            </a>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="font-mono text-[10px] text-white/40">
+                            {new Date(msg.date).toLocaleString()}
+                          </span>
+                          <button
+                            onClick={() => handleDeleteMessage(msg.id)}
+                            className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+                            title="Delete Message"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="font-mono text-xs text-[#00D9FF] uppercase tracking-wider mb-2 font-semibold">
+                          Subject: {msg.subject}
+                        </div>
+                        <div className="p-4 rounded-xl bg-[#08090B] border border-white/5 text-xs font-mono text-white/80 leading-relaxed whitespace-pre-wrap">
+                          {msg.message}
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end pt-2">
+                        <a
+                          href={`mailto:${msg.email}?subject=Re: ${encodeURIComponent(msg.subject)}`}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#00D9FF] text-[#08090B] font-display font-bold text-xs uppercase tracking-wider hover:bg-[#38e1ff] transition-all"
+                        >
+                          <Mail className="w-3.5 h-3.5" />
+                          <span>Reply Directly via Email</span>
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </main>

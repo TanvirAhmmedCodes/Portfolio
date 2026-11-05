@@ -5,10 +5,21 @@ import { Project, manualProjects as defaultProjects } from "./projects";
 
 export type PersonalData = typeof defaultPersonal;
 
+export interface ContactMessage {
+  id: string;
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+  date: string;
+  read?: boolean;
+}
+
 interface CustomData {
   achievements: Achievement[];
   projects: Project[];
   personal?: Partial<PersonalData>;
+  messages?: ContactMessage[];
 }
 
 const STORE_PATH = path.join(process.cwd(), "lib", "custom-store.json");
@@ -82,5 +93,30 @@ export function getAllAchievements(): Achievement[] {
 export function getAllManualProjects(): Project[] {
   const custom = getCustomData();
   return [...defaultProjects, ...custom.projects];
+}
+
+export function saveContactMessage(msg: { name: string; email: string; subject: string; message: string }): ContactMessage {
+  const store = getCustomData();
+  const newMsg: ContactMessage = {
+    ...msg,
+    id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    date: new Date().toISOString(),
+    read: false,
+  };
+  store.messages = [newMsg, ...(store.messages || [])];
+  saveCustomData(store);
+  return newMsg;
+}
+
+export function getAllMessages(): ContactMessage[] {
+  const store = getCustomData();
+  return store.messages || [];
+}
+
+export function deleteMessage(id: string): ContactMessage[] {
+  const store = getCustomData();
+  store.messages = (store.messages || []).filter((m) => m.id !== id);
+  saveCustomData(store);
+  return store.messages;
 }
 

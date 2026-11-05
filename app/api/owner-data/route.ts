@@ -7,6 +7,8 @@ import {
   getAllManualProjects,
   getEffectivePersonal,
   savePersonalData,
+  getAllMessages,
+  deleteMessage,
 } from "@/lib/store";
 
 export async function GET() {
@@ -15,6 +17,7 @@ export async function GET() {
     achievements: getAllAchievements(),
     skills,
     projects: getAllManualProjects(),
+    messages: getAllMessages(),
   });
 }
 
@@ -69,6 +72,14 @@ export async function POST(request: Request) {
         success: true,
         achievements: getAllAchievements(),
         projects: getAllManualProjects(),
+      });
+    }
+
+    if (action === "delete_message") {
+      const updatedMessages = deleteMessage(id);
+      return NextResponse.json({
+        success: true,
+        messages: updatedMessages,
       });
     }
 
