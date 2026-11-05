@@ -42,6 +42,31 @@ export default function Contact() {
     setErrorMessage("");
 
     try {
+      // 1. Direct Web3Forms submission from browser to Gmail (never blocked by Cloudflare in browser)
+      const web3Key = process.env.NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY;
+      if (web3Key) {
+        try {
+          await fetch("https://api.web3forms.com/submit", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            body: JSON.stringify({
+              access_key: web3Key,
+              name: formData.name,
+              email: formData.email,
+              subject: `[Portfolio Inquiry] ${formData.subject} - from ${formData.name}`,
+              message: formData.message,
+              from_name: `${formData.name} (via Portfolio)`,
+            }),
+          });
+        } catch (web3Err) {
+          console.warn("Client Web3Forms dispatch deferred:", web3Err);
+        }
+      }
+
+      // 2. Also record in Owner Control Center inbox (/owner-access)
       const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
