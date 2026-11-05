@@ -106,10 +106,12 @@ export default function Navbar() {
               className={cn(
                 "flex items-center gap-2.5 px-4 py-2 rounded-full border text-xs font-mono transition-all duration-300 group cursor-pointer shadow-md",
                 isPlaying
-                  ? "bg-[#00D9FF]/10 border-[#00D9FF]/50 text-[#00D9FF] hover:bg-[#00D9FF]/20"
-                  : "bg-[#111418]/80 border-white/10 text-white/40 hover:text-white hover:border-white/20",
+                  ? "bg-[#00D9FF]/10 border-[#00D9FF]/50 text-[#00D9FF] hover:bg-[#00D9FF]/20 shadow-[0_0_15px_rgba(0,217,255,0.25)]"
+                  : soundEnabled
+                    ? "bg-[#00D9FF]/5 border-[#00D9FF]/30 text-[#00D9FF]/90 hover:bg-[#00D9FF]/15 animate-pulse"
+                    : "bg-[#111418]/80 border-white/10 text-white/40 hover:text-white hover:border-white/20",
               )}
-              title={isPlaying ? "Mute All Sound & Music" : "Enable Sound & Background Music"}
+              title={isPlaying ? "Mute All Sound & Music" : soundEnabled ? "Click to Start Ambient Soundtrack" : "Unmute Sound"}
             >
               {isPlaying ? (
                 <>
@@ -121,10 +123,15 @@ export default function Navbar() {
                   </div>
                   <span className="tracking-wider font-bold">SOUND ON</span>
                 </>
+              ) : soundEnabled ? (
+                <>
+                  <Volume2 className="w-3.5 h-3.5 text-[#00D9FF] animate-pulse" />
+                  <span className="tracking-wider font-semibold">TAP FOR SOUND</span>
+                </>
               ) : (
                 <>
                   <VolumeX className="w-3.5 h-3.5 text-white/40 group-hover:text-white" />
-                  <span className="tracking-wider">SOUND OFF</span>
+                  <span className="tracking-wider">MUTED</span>
                 </>
               )}
             </button>
@@ -205,15 +212,19 @@ export default function Navbar() {
                       "flex items-center gap-2 px-4 py-2 rounded-full border text-xs font-mono",
                       isPlaying
                         ? "bg-[#00D9FF]/10 border-[#00D9FF]/40 text-[#00D9FF]"
-                        : "border-white/10 text-white/50",
+                        : soundEnabled
+                          ? "bg-[#00D9FF]/5 border-[#00D9FF]/30 text-[#00D9FF]"
+                          : "border-white/10 text-white/50",
                     )}
                   >
                     {isPlaying ? (
                       <Volume2 className="w-3.5 h-3.5 text-[#00D9FF]" />
+                    ) : soundEnabled ? (
+                      <Volume2 className="w-3.5 h-3.5 text-[#00D9FF] animate-pulse" />
                     ) : (
                       <VolumeX className="w-3.5 h-3.5" />
                     )}
-                    <span>{isPlaying ? "SOUND ON" : "SOUND OFF"}</span>
+                    <span>{isPlaying ? "SOUND ON" : soundEnabled ? "TAP FOR SOUND" : "MUTED"}</span>
                   </button>
                   <a
                     href="#contact"

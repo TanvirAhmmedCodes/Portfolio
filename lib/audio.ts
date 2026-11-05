@@ -244,14 +244,14 @@ class SoundManager {
     };
 
     gestureEvents.forEach((ev) => {
-      window.addEventListener(ev, onUserGesture, { passive: true });
-      document.addEventListener(ev, onUserGesture, { passive: true });
+      window.addEventListener(ev, onUserGesture, { capture: true, passive: true });
+      document.addEventListener(ev, onUserGesture, { capture: true, passive: true });
     });
 
     this.removeGestureListeners = () => {
       gestureEvents.forEach((ev) => {
-        window.removeEventListener(ev, onUserGesture);
-        document.removeEventListener(ev, onUserGesture);
+        window.removeEventListener(ev, onUserGesture, { capture: true } as EventListenerOptions);
+        document.removeEventListener(ev, onUserGesture, { capture: true } as EventListenerOptions);
       });
     };
   }

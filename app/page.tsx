@@ -8,6 +8,7 @@ import Skills from "@/components/Skills";
 import GithubActivity from "@/components/GithubActivity";
 import Contact from "@/components/Contact";
 import Footer from "@/components/Footer";
+import AudioExperiencePrompt from "@/components/AudioExperiencePrompt";
 
 export default function Home() {
   return (
@@ -22,6 +23,7 @@ export default function Home() {
       <GithubActivity />
       <Contact />
       <Footer />
+      <AudioExperiencePrompt />
     </main>
   );
 }
