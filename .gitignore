@@ -26,15 +26,28 @@
 *.log
 .claude/
 
-# large reference video files and raw audio files (avoid GitHub 100MB / push bloat & protect music)
-References/*.mp4
+# Design reference files, working frames, and raw assets
+/Images/
+/References/
+/scratch/
+*.bin
+*.mp4
 *.mp3
 
-# temporary screenshots and tests
+# Temporary captures and test images
 *shot*.png
 *crop*.png
 *test*.*
 all_sections.png
+
+# Unused boilerplate assets
+/public/logo.jpg
+/public/logo.png
+/public/file.svg
+/public/globe.svg
+/public/next.svg
+/public/vercel.svg
+/public/window.svg
 
 # debug
 npm-debug.log*
@@ -42,7 +55,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# environment variables (NEVER commit secrets or API keys)
 .env*
 !.env.example
 
@@ -52,6 +65,3 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
-.vercel
-.env*
