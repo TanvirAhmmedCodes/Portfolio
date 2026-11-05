@@ -105,46 +105,25 @@ export default function Navbar() {
               onClick={handleSoundToggle}
               className={cn(
                 "flex items-center gap-2.5 px-4 py-2 rounded-full border text-xs font-mono transition-all duration-300 group cursor-pointer shadow-md",
-                soundEnabled
+                isPlaying
                   ? "bg-[#00D9FF]/10 border-[#00D9FF]/50 text-[#00D9FF] hover:bg-[#00D9FF]/20"
                   : "bg-[#111418]/80 border-white/10 text-white/40 hover:text-white hover:border-white/20",
               )}
-              title={soundEnabled ? "Mute All Sound & Music" : "Enable Sound & Background Music"}
+              title={isPlaying ? "Mute All Sound & Music" : "Enable Sound & Background Music"}
             >
-              {soundEnabled ? (
+              {isPlaying ? (
                 <>
                   {/* Dynamic Sound Wave Bars */}
                   <div className="flex items-end gap-[2px] h-3">
-                    <span
-                      className={cn(
-                        "w-[2px] rounded-full bg-[#00D9FF] transition-all",
-                        isPlaying
-                          ? "animate-[soundwave_0.8s_ease-in-out_infinite] h-3"
-                          : "h-2",
-                      )}
-                    />
-                    <span
-                      className={cn(
-                        "w-[2px] rounded-full bg-[#00D9FF] transition-all",
-                        isPlaying
-                          ? "animate-[soundwave_1.1s_ease-in-out_infinite_0.2s] h-3.5"
-                          : "h-1.5",
-                      )}
-                    />
-                    <span
-                      className={cn(
-                        "w-[2px] rounded-full bg-[#00D9FF] transition-all",
-                        isPlaying
-                          ? "animate-[soundwave_0.9s_ease-in-out_infinite_0.4s] h-2.5"
-                          : "h-2",
-                      )}
-                    />
+                    <span className="w-[2px] rounded-full bg-[#00D9FF] animate-[soundwave_0.8s_ease-in-out_infinite] h-3" />
+                    <span className="w-[2px] rounded-full bg-[#00D9FF] animate-[soundwave_1.1s_ease-in-out_infinite_0.2s] h-3.5" />
+                    <span className="w-[2px] rounded-full bg-[#00D9FF] animate-[soundwave_0.9s_ease-in-out_infinite_0.4s] h-2.5" />
                   </div>
                   <span className="tracking-wider font-bold">SOUND ON</span>
                 </>
               ) : (
                 <>
-                  <VolumeX className="w-3.5 h-3.5 text-white/40" />
+                  <VolumeX className="w-3.5 h-3.5 text-white/40 group-hover:text-white" />
                   <span className="tracking-wider">SOUND OFF</span>
                 </>
               )}
@@ -224,17 +203,17 @@ export default function Navbar() {
                     onClick={handleSoundToggle}
                     className={cn(
                       "flex items-center gap-2 px-4 py-2 rounded-full border text-xs font-mono",
-                      soundEnabled
+                      isPlaying
                         ? "bg-[#00D9FF]/10 border-[#00D9FF]/40 text-[#00D9FF]"
                         : "border-white/10 text-white/50",
                     )}
                   >
-                    {soundEnabled ? (
+                    {isPlaying ? (
                       <Volume2 className="w-3.5 h-3.5 text-[#00D9FF]" />
                     ) : (
                       <VolumeX className="w-3.5 h-3.5" />
                     )}
-                    <span>{soundEnabled ? "SOUND ON" : "SOUND OFF"}</span>
+                    <span>{isPlaying ? "SOUND ON" : "SOUND OFF"}</span>
                   </button>
                   <a
                     href="#contact"

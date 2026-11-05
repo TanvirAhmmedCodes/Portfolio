@@ -2,18 +2,19 @@
 
 type Listener = (enabled: boolean, isMusicPlaying: boolean) => void;
 
-const XOR_KEY = 0x7A;
 const TARGET_VOLUME = 0.35;
 
 class SoundManager {
-  private bgAudio: HTMLAudioElement | null = null;
-  private blobUrl: string | null = null;
+  private ctx: AudioContext | null = null;
+  private gainNode: GainNode | null = null;
+  private audioBuffer: AudioBuffer | null = null;
+  private rawBytes: Uint8Array | null = null;
+  private sourceNode: AudioBufferSourceNode | null = null;
   private enabled: boolean = true;
   private isMusicActive: boolean = false;
   private listeners: Set<Listener> = new Set();
   private setupDone: boolean = false;
-  private isPreparing: boolean = false;
-  private ctx: AudioContext | null = null;
+  private fetchPromise: Promise<Uint8Array | null> | null = null;
   private removeGestureListeners: (() => void) | null = null;
 
   constructor() {
@@ -24,100 +25,185 @@ class SoundManager {
     }
   }
 
-  // Pre-load, de-obfuscate in RAM, and create an in-memory Blob URL (100% IDM proof!)
-  private async getAudioElement(): Promise<HTMLAudioElement | null> {
+  // Pre-fetch audio via pure JSON API (100% IDM-proof — IDM NEVER intercepts JSON!)
+  private prefetchAudio(): Promise<Uint8Array | null> {
+    if (this.rawBytes) return Promise.resolve(this.rawBytes);
+    if (this.fetchPromise) return this.fetchPromise;
+
+    this.fetchPromise = (async () => {
+      try {
+        const res = await fetch("/api/audio-stream", {
+          cache: "force-cache",
+          headers: { Accept: "application/json" },
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+        if (!data.stream) throw new Error("No stream payload in response");
+
+        // Fast base64 decode in memory
+        const binaryStr = atob(data.stream);
+        const len = binaryStr.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryStr.charCodeAt(i);
+        }
+
+        this.rawBytes = bytes;
+
+        // Eagerly decode into AudioBuffer if context exists
+        if (this.ctx && !this.audioBuffer) {
+          try {
+            const copy = new Uint8Array(bytes.byteLength);
+            copy.set(bytes);
+            this.audioBuffer = await this.ctx.decodeAudioData(copy.buffer);
+            if (this.enabled && this.ctx.state === "running" && !this.sourceNode) {
+              this.startBufferPlayback();
+            }
+          } catch (e) {
+            console.warn("Eager audio decode:", e);
+          }
+        }
+
+        return bytes;
+      } catch (err) {
+        console.warn("Audio stream fetch deferred:", err);
+        this.fetchPromise = null;
+        return null;
+      }
+    })();
+
+    return this.fetchPromise;
+  }
+
+  private initContext(): AudioContext | null {
     if (typeof window === "undefined") return null;
-    if (this.bgAudio) return this.bgAudio;
-    if (this.isPreparing) return null;
-    this.isPreparing = true;
+    if (!this.ctx) {
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (AudioCtx) {
+        this.ctx = new AudioCtx();
+        this.gainNode = this.ctx.createGain();
+        this.gainNode.gain.setValueAtTime(this.enabled ? TARGET_VOLUME : 0, this.ctx.currentTime);
+        this.gainNode.connect(this.ctx.destination);
+      }
+    }
+    return this.ctx;
+  }
+
+  private async getAudioBuffer(): Promise<AudioBuffer | null> {
+    if (this.audioBuffer) return this.audioBuffer;
+
+    this.initContext();
+    if (!this.ctx) return null;
+
+    let bytes = this.rawBytes;
+    if (!bytes) {
+      bytes = await this.prefetchAudio();
+    }
+    if (!bytes) return null;
+
+    if (this.audioBuffer) return this.audioBuffer;
 
     try {
-      let res = await fetch("/soundtrack.bin", { cache: "force-cache" }).catch(() => null);
-      if (!res || !res.ok) {
-        res = await fetch("/api/soundtrack", { cache: "force-cache" });
-      }
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const copy = new Uint8Array(bytes.byteLength);
+      copy.set(bytes);
+      this.audioBuffer = await this.ctx.decodeAudioData(copy.buffer);
 
-      const arrayBuf = await res.arrayBuffer();
-      const bytes = new Uint8Array(arrayBuf);
-
-      // De-obfuscate in RAM (< 2ms)
-      for (let i = 0; i < bytes.length; i++) {
-        bytes[i] ^= XOR_KEY;
+      if (this.enabled && this.ctx.state === "running" && !this.sourceNode) {
+        this.startBufferPlayback();
       }
 
-      // Create an internal memory Blob URL (Zero network request, IDM cannot intercept!)
-      const blob = new Blob([bytes], { type: "audio/mpeg" });
-      this.blobUrl = URL.createObjectURL(blob);
-
-      const audio = new Audio(this.blobUrl);
-      audio.loop = true;
-      audio.volume = TARGET_VOLUME;
-      audio.preload = "auto";
-
-      audio.addEventListener("play", () => {
-        this.isMusicActive = true;
-        this.notify();
-      });
-
-      audio.addEventListener("pause", () => {
-        this.isMusicActive = false;
-        this.notify();
-      });
-
-      audio.addEventListener("ended", () => {
-        this.isMusicActive = false;
-        this.notify();
-      });
-
-      this.bgAudio = audio;
-      return audio;
+      return this.audioBuffer;
     } catch (err) {
-      console.warn("Soundtrack preparation failed:", err);
+      console.warn("Audio buffer decode error:", err);
       return null;
-    } finally {
-      this.isPreparing = false;
     }
+  }
+
+  private startBufferPlayback() {
+    if (!this.ctx || !this.audioBuffer || !this.gainNode) return;
+    if (this.sourceNode) return;
+
+    try {
+      const source = this.ctx.createBufferSource();
+      source.buffer = this.audioBuffer;
+      source.loop = true;
+      source.connect(this.gainNode);
+
+      this.gainNode.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.gainNode.gain.setValueAtTime(0, this.ctx.currentTime);
+      this.gainNode.gain.linearRampToValueAtTime(TARGET_VOLUME, this.ctx.currentTime + 0.3);
+
+      source.start(0);
+      this.sourceNode = source;
+      this.isMusicActive = true;
+      this.notify();
+
+      if (this.removeGestureListeners) {
+        this.removeGestureListeners();
+        this.removeGestureListeners = null;
+      }
+    } catch (err) {
+      console.warn("Playback start failed:", err);
+    }
+  }
+
+  private stopBufferPlayback() {
+    if (this.ctx && this.gainNode) {
+      this.gainNode.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.gainNode.gain.setValueAtTime(this.gainNode.gain.value, this.ctx.currentTime);
+      this.gainNode.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.15);
+    }
+
+    setTimeout(() => {
+      if (!this.enabled && this.sourceNode) {
+        try {
+          this.sourceNode.stop();
+          this.sourceNode.disconnect();
+        } catch {}
+        this.sourceNode = null;
+      }
+    }, 200);
+
+    this.isMusicActive = false;
+    this.notify();
   }
 
   public async playBackgroundMusic() {
     if (!this.enabled) return;
 
-    const audio = await this.getAudioElement();
-    if (!audio) return;
+    this.initContext();
+    if (!this.ctx) return;
 
-    try {
-      audio.volume = TARGET_VOLUME;
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        await playPromise;
-        this.isMusicActive = true;
-        this.notify();
-        if (this.removeGestureListeners) {
-          this.removeGestureListeners();
-          this.removeGestureListeners = null;
-        }
+    if (this.ctx.state === "suspended") {
+      try {
+        await this.ctx.resume();
+      } catch {
+        // Will be resumed on first user gesture
       }
-    } catch {
-      // Autoplay blocked by browser policy; will unlock on first user gesture
+    }
+
+    const buffer = await this.getAudioBuffer();
+    if (buffer && this.ctx.state === "running" && !this.sourceNode) {
+      this.startBufferPlayback();
     }
   }
 
   public stopBackgroundMusic() {
-    if (this.bgAudio) {
-      try {
-        this.bgAudio.pause();
-      } catch {}
-    }
-    this.isMusicActive = false;
-    this.notify();
+    this.stopBufferPlayback();
   }
 
   public setupGlobalAutoplay() {
     if (typeof window === "undefined" || this.setupDone) return;
     this.setupDone = true;
 
-    // 1. Immediately attempt autoplay on open / refresh
+    // 1. Initialize context and prefetch audio payload
+    this.initContext();
+    this.prefetchAudio();
+
+    // 2. Immediate playback attempts on open & refresh
     if (this.enabled) {
       this.playBackgroundMusic();
 
@@ -126,11 +212,11 @@ class SoundManager {
       } else {
         window.addEventListener("load", () => this.playBackgroundMusic(), { once: true });
       }
-      setTimeout(() => this.playBackgroundMusic(), 100);
+      setTimeout(() => this.playBackgroundMusic(), 150);
       setTimeout(() => this.playBackgroundMusic(), 500);
     }
 
-    // 2. Multi-gesture fallback for cold browser sessions
+    // 3. Multi-gesture fallback for cold browser sessions
     const gestureEvents = [
       "pointerdown",
       "click",
@@ -142,8 +228,18 @@ class SoundManager {
     ];
 
     const onUserGesture = () => {
-      if (this.enabled && !this.isMusicActive) {
-        this.playBackgroundMusic();
+      if (!this.enabled) return;
+      this.initContext();
+      if (this.ctx) {
+        if (this.ctx.state === "suspended") {
+          this.ctx.resume().then(() => {
+            if (this.enabled && !this.isMusicActive) {
+              this.playBackgroundMusic();
+            }
+          });
+        } else if (this.enabled && !this.isMusicActive) {
+          this.playBackgroundMusic();
+        }
       }
     };
 
@@ -160,7 +256,13 @@ class SoundManager {
     };
   }
 
+  // Single-click smart toggle: if music is not yet playing, clicking it TURNS IT ON immediately!
   public handleUserSoundClick(): boolean {
+    this.initContext();
+    if (this.ctx && this.ctx.state === "suspended") {
+      this.ctx.resume();
+    }
+
     if (!this.isMusicActive) {
       this.enabled = true;
       if (typeof window !== "undefined") {
@@ -177,7 +279,7 @@ class SoundManager {
     }
 
     this.notify();
-    return this.enabled;
+    return this.isMusicActive;
   }
 
   public toggle(): boolean {
@@ -204,6 +306,10 @@ class SoundManager {
 
   public playClick() {
     if (!this.enabled) return;
+    this.initContext();
+    if (this.ctx && this.ctx.state === "suspended") {
+      this.ctx.resume();
+    }
     this.playBeep(620, 0.04, "sine", 0.03);
     if (!this.isMusicActive) {
       this.playBackgroundMusic();
@@ -215,19 +321,9 @@ class SoundManager {
     this.playBeep(440, 0.02, "triangle", 0.015);
   }
 
-  private initSfxContext() {
-    if (typeof window === "undefined" || this.ctx) return;
-    const AudioCtx =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (AudioCtx) {
-      this.ctx = new AudioCtx();
-    }
-  }
-
   private playBeep(freq: number, duration: number, type: OscillatorType = "sine", gainVal: number = 0.05) {
     try {
-      this.initSfxContext();
+      this.initContext();
       if (!this.ctx || this.ctx.state !== "running") return;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
